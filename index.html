@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>蓝粉工作倒计时</title>
+  <title>摸鱼守门员</title>
   <style>
     * { box-sizing: border-box; }
     :root {
@@ -33,8 +33,8 @@
 
   <main class="app">
     <div class="layer top"><span class="sticker blue" id="startSticker">9:00 开始</span><span class="sticker pink" id="lunchSticker">12:00–13:30 午休</span><span class="sticker blue" id="endSticker">18:00 下班</span></div>
-    <h1 class="layer">工作倒计时</h1>
-    <p class="layer subtitle">用户可以自行设定上班/下班/午休时间。计时、摸鱼、本周统计都保存在本地浏览器，适合部署成可分享网页。</p>
+    <h1 class="layer">摸鱼守门员</h1>
+    <p class="layer subtitle">一个会盯着你摸鱼的小网页：可自行设定上班/下班/午休时间，连续摸鱼超过 15 分钟会弹窗提醒。</p>
 
     <section class="layer settings">
       <div class="settings-head"><div class="settings-title">时间设置</div><div><button class="tiny-btn" onclick="saveSettings()">保存设置</button> <button class="tiny-btn pink-btn" onclick="requestNotify()">开启提醒</button></div></div>
@@ -63,7 +63,7 @@
 
 <script>
 const DEFAULT_SETTINGS={workStart:"09:00",workEnd:"18:00",lunchStart:"12:00",lunchEnd:"13:30"};
-let settings=loadSettings();let intervalId=null,hasStarted=false,isFishing=false,fishStartTime=null,totalFishMs=0,latestRemainingMs=0,latestProgressPercent=0,notifiedEnd=false;
+let settings=loadSettings();let intervalId=null,hasStarted=false,isFishing=false,fishStartTime=null,totalFishMs=0,latestRemainingMs=0,latestProgressPercent=0,notifiedEnd=false,fishAlertShown=false;
 const $=id=>document.getElementById(id);
 const timerEl=$("timer"),timerTitleEl=$("timerTitle"),statusEl=$("status"),progressEl=$("progress"),progressTextEl=$("progressText"),fishTotalEl=$("fishTotal"),fishCurrentEl=$("fishCurrent"),modeTextEl=$("modeText"),fishBtn=$("fishBtn"),settlementEl=$("settlement");
 function getChinaTimeNow(){const n=new Date();const utc=n.getTime()+n.getTimezoneOffset()*60000;return new Date(utc+8*60*60000)}
@@ -80,9 +80,9 @@ function effectiveRemaining(now){const ws=timePoint(now,settings.workStart),we=t
 function getState(now){const ws=timePoint(now,settings.workStart),we=timePoint(now,settings.workEnd),ls=timePoint(now,settings.lunchStart),le=timePoint(now,settings.lunchEnd);const remaining=effectiveRemaining(now);if(now<ws)return{remaining,title:"还没到上班时间",status:`现在还没到 ${settings.workStart}，可以先准备一下。`};if(now>=we)return{remaining:0,title:"今天已经完成",status:`已经到 ${settings.workEnd}，可以快乐下班啦。`};if(now>=ls&&now<le)return{remaining,title:"现在是午休时间",status:`午休中，距离重新开始还有 ${fmt(le-now)}。`};return{remaining,title:"今天剩余有效工作时间",status:isFishing?"摸鱼中，今天的小鱼正在累计。":"工作中，保持节奏就好。"}}
 function dayProgress(now){const ws=timePoint(now,settings.workStart),we=timePoint(now,settings.workEnd);return Math.min(1,Math.max(0,(now-ws)/(we-ws)))}
 function currentFish(now){return isFishing&&fishStartTime?now-fishStartTime:0}
-function updateDisplay(){const now=getChinaTimeNow(),state=getState(now),p=dayProgress(now),percent=Math.round(p*100),cur=currentFish(now),shown=totalFishMs+cur;latestRemainingMs=state.remaining;latestProgressPercent=percent;timerEl.textContent=fmt(state.remaining);timerTitleEl.textContent=state.title;statusEl.textContent=state.status;progressEl.style.width=`${percent}%`;progressTextEl.textContent=`${percent}%`;fishTotalEl.textContent=fmt(shown);fishCurrentEl.textContent=fmt(cur);modeTextEl.textContent=!hasStarted?"待开始":isFishing?"摸鱼中":state.remaining<=0?"已完成":"工作中";if(state.remaining<=0&&!notifiedEnd){notifiedEnd=true;sendNotify("下班啦",`已经到 ${settings.workEnd}，可以结算今天了。`)}}
+function updateDisplay(){const now=getChinaTimeNow(),state=getState(now),p=dayProgress(now),percent=Math.round(p*100),cur=currentFish(now),shown=totalFishMs+cur;latestRemainingMs=state.remaining;latestProgressPercent=percent;timerEl.textContent=fmt(state.remaining);timerTitleEl.textContent=state.title;statusEl.textContent=state.status;progressEl.style.width=`${percent}%`;progressTextEl.textContent=`${percent}%`;fishTotalEl.textContent=fmt(shown);fishCurrentEl.textContent=fmt(cur);modeTextEl.textContent=!hasStarted?"待开始":isFishing?"摸鱼中":state.remaining<=0?"已完成":"工作中";if(isFishing&&cur>=15*60*1000&&!fishAlertShown){fishAlertShown=true;statusEl.textContent="连续摸鱼已经超过 15 分钟啦，该回来推进一点点了。";sendNotify("摸鱼守门员提醒","你已经连续摸鱼超过 15 分钟啦，该回来工作一下了。");setTimeout(()=>alert("摸鱼守门员提醒：你已经连续摸鱼超过 15 分钟啦，该回来工作一下了。"),50)}if(state.remaining<=0&&!notifiedEnd){notifiedEnd=true;sendNotify("下班啦",`已经到 ${settings.workEnd}，可以结算今天了。`)}}
 function startWork(){hasStarted=true;notifiedEnd=false;if(!intervalId)intervalId=setInterval(updateDisplay,1000);updateDisplay()}
-function toggleFish(){if(!hasStarted)startWork();const now=getChinaTimeNow();if(!isFishing){isFishing=true;fishStartTime=now;fishBtn.textContent="结束摸鱼";fishBtn.style.background="#e9f7ff";fishBtn.style.color="#4388bc";fishBtn.style.border="2px solid #bfe8ff"}else{totalFishMs+=now-fishStartTime;isFishing=false;fishStartTime=null;fishBtn.textContent="开始摸鱼";fishBtn.style.background="#fff0f7";fishBtn.style.color="#d65c91";fishBtn.style.border="2px solid #ffc7df"}updateDisplay()}
+function toggleFish(){if(!hasStarted)startWork();const now=getChinaTimeNow();if(!isFishing){isFishing=true;fishStartTime=now;fishAlertShown=false;fishBtn.textContent="结束摸鱼";fishBtn.style.background="#e9f7ff";fishBtn.style.color="#4388bc";fishBtn.style.border="2px solid #bfe8ff"}else{totalFishMs+=now-fishStartTime;isFishing=false;fishStartTime=null;fishBtn.textContent="开始摸鱼";fishBtn.style.background="#fff0f7";fishBtn.style.color="#d65c91";fishBtn.style.border="2px solid #ffc7df"}updateDisplay()}
 function finishWork(){if(!hasStarted)startWork();const now=getChinaTimeNow();if(isFishing&&fishStartTime){totalFishMs+=now-fishStartTime;isFishing=false;fishStartTime=null;fishBtn.textContent="开始摸鱼";fishBtn.style.background="#fff0f7";fishBtn.style.color="#d65c91";fishBtn.style.border="2px solid #ffc7df"}updateDisplay();saveTodayStats();showSettlement()}
 function readStats(){try{return JSON.parse(localStorage.getItem("cuteWorkStats")||"{}")}catch(e){return{}}}
 function writeStats(s){localStorage.setItem("cuteWorkStats",JSON.stringify(s))}
